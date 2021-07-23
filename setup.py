@@ -1,7 +1,10 @@
+import versioneer
+
 from setuptools import setup, find_packages
 
 setup(name='DailyDataServer',
-      version='0.0.1',
+      version=versioneer.get_version(),
+      cmdclass=versioneer.get_cmdclass(),
       description='Web server to store and update time log information',
       url='https://github.com/JEElsner/DailyDataServer',
       author='Jonathan Elsner',
