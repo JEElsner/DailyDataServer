@@ -1,0 +1,4 @@
+include DailyDataServer/schema.sql
+graft DailyDataServer/static
+graft DailyDataServer/templates
+global-exclude *.pyc
