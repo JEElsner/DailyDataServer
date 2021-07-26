@@ -8,6 +8,7 @@ from flask.cli import with_appcontext
 def init_app(app):
     app.teardown_appcontext(close_db)
     app.cli.add_command(init_db_command)
+    app.cli.add_command(reset_db_command)
 
 
 def get_db():
@@ -28,12 +29,36 @@ def init_db():
         db.executescript(f.read().decode('utf8'))
 
 
+def drop_db_tables():
+    db = get_db()
+
+    try:
+        db.executescript('DROP TABLE user;'
+                         'DROP TABLE activity;'
+                         'DROP TABLE timelog;')
+        db.commit()
+    except:
+        pass
+
+
 @click.command('init-db')
 @with_appcontext
 def init_db_command():
     """Create the tables if they do not already exist."""
     init_db()
     click.echo('Initialized the database.')
+
+
+@click.command('reset-db')
+@with_appcontext
+def reset_db_command():
+    if click.confirm('Are you sure?'):
+        drop_db_tables()
+        init_db()
+
+        click.echo('Reset the database.')
+    else:
+        click.echo('Aborted reseting the database.')
 
 
 def close_db(e=None):
