@@ -1,0 +1,17 @@
+{
+    // See https://go.microsoft.com/fwlink/?LinkId=733558
+    // for the documentation about the tasks.json format
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Initialize Python Virtual Environment",
+            "type": "shell",
+            "command": "./tasks/init_venv.ps1"
+        },
+        {
+            "label": "Analyze Test Coverage",
+            "type": "shell",
+            "command": "./tasks/init_venv.ps1; ./tasks/coverage.ps1",
+        }
+    ]
+}

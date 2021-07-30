@@ -1,0 +1,25 @@
+{
+    "sqltools.connections": [
+        {
+            "previewLimit": 50,
+            "driver": "SQLite",
+            "name": "DailyDataServer",
+            "database": "${workspaceFolder:DailyDataServer}/instance/dailydata.sqlite"
+        },
+        {
+            "previewLimit": 50,
+            "driver": "SQLite",
+            "name": "Server in Memory",
+            "database": ":memory:"
+        }
+    ],
+    "python.terminal.activateEnvInCurrentTerminal": true,
+    "python.terminal.activateEnvironment": true,
+    "python.testing.pytestArgs": [],
+    "python.testing.unittestEnabled": false,
+    "python.testing.nosetestsEnabled": false,
+    "python.testing.pytestEnabled": true,
+    //"coverage-gutters.showGutterCoverage": false,
+    //"coverage-gutters.showLineCoverage": true,
+    "coverage-gutters.showRulerCoverage": true
+}
