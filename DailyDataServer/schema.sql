@@ -29,7 +29,7 @@ CREATE TABLE IF NOT EXISTS timelog (
     record_time TIMESTAMP NOT NULL,
     nominal_time TIMESTAMP NOT NULL,
     nominal_time_timezone_offset FLOAT NOT NULL,
-    nominal_time_timezone_name TEXT NOT NULL,
+    nominal_time_timezone_name TEXT,
     last_modification_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES user (id) ON DELETE CASCADE ON UPDATE CASCADE,
     FOREIGN KEY (activity_id) REFERENCES activity (id) ON UPDATE CASCADE ON DELETE RESTRICT

@@ -8,7 +8,9 @@ from werkzeug.exceptions import abort
 
 from DailyDataServer.db import get_db
 
-from datetime import datetime
+from datetime import datetime, tzinfo
+
+from dateutil import parser, tz
 
 bp = Blueprint('api', __name__, url_prefix='/api')
 
@@ -134,7 +136,7 @@ def add_user():
 
 
 @bp.route('/user/<username>', methods=('GET',  'PATCH', 'DELETE'))
-def user(username):
+def user(username: str):
     db = get_db()
 
     user = db.execute(
@@ -233,7 +235,7 @@ def user(username):
 
 
 @bp.route('/user/<username>/activity', methods=('GET', 'POST'))
-def activity(username):
+def activity(username: str):
     db = get_db()
 
     user = db.execute(
@@ -302,7 +304,7 @@ def activity(username):
 
 
 @bp.route('/user/<username>/activity/<activity_name>', methods=('GET', 'PATCH', 'DELETE'))
-def named_activity(username, activity_name):
+def named_activity(username: str, activity_name: str):
     db = get_db()
 
     user = get_user(username)
@@ -394,6 +396,219 @@ def named_activity(username, activity_name):
         return (b"", 204)
 
 
-@bp.route('/user/<username>/timelog', methods=('GET', 'POST'))
-def timelog(username):
-    abort(501)
+@bp.route('/user/<username>/log', methods=('GET', 'POST'))
+def log(username: str):
+    db = get_db()
+
+    user = get_user(username)
+    if not user:
+        abort(404, 'User not found.')
+    user_id = user['id']
+
+    if request.method == 'GET':
+        rows = db.execute(
+            'SELECT * FROM timelog WHERE user_id=?', (user_id,)).fetchall()
+
+        return jsonify([{
+            'id': item['id'],
+            'activity_id': item['activity_id'],
+            'source': item['source'],
+            'latitude': item['latitude'],
+            'longitude': item['longitude'],
+            'server_time': item['server_time'].isoformat(),
+            'record_time': item['record_time'].isoformat(),
+            'nominal_time': item['nominal_time'].isoformat(),
+            'nominal_time_timezone_offset': item['nominal_time_timezone_offset'],
+            'nominal_time_timezone_name': item['nominal_time_timezone_name'],
+            'last_modification_time': item['last_modification_time'].isoformat()
+        } for item in rows])
+    elif request.method == 'POST':
+        json_data = request.get_json()
+
+        activity_id = json_data.get('activity_id', None)
+        if activity_id and type(activity_id) is int:
+            pass
+        elif activity_id:
+            abort(400, 'Activity id must be integer.')
+        else:
+            abort(400, 'Activity id is required.')
+
+        source = json_data.get('source', None)
+        if not source:
+            abort(400, 'Source of log entry is required.')
+
+        latitude = json_data.get('latitude', None)
+        if latitude and type(latitude) is not float:
+            abort(400, 'Latitude must be float.')
+
+        longitude = json_data.get('longitude', None)
+        if longitude and type(longitude) is not float:
+            abort(400, 'Longitude must be float.')
+
+        _curr_time = datetime.utcnow()
+        record_time = json_data.get('record_time', _curr_time)
+
+        nominal_time = None
+        nominal_time_timezone_offset = None
+        nominal_time_timezone_name = ''
+        nominal_time_str = json_data.get('nominal_time', None)
+        if nominal_time_str:
+            try:
+                _full_nom_time = parser.isoparse(nominal_time_str)
+                nominal_time = _full_nom_time.astimezone(
+                    tz.UTC).replace(tzinfo=None)
+                nominal_time_timezone_offset = _full_nom_time.utcoffset().total_seconds()
+            except ValueError:
+                abort(400, 'nominal_time must be in ISO 8601 format.')
+        else:
+            abort(400, 'nominal_time is required.')
+
+        cursor = db.execute('INSERT INTO timelog ('
+                            ' user_id,'
+                            ' activity_id,'
+                            ' source,'
+                            ' latitude,'
+                            ' longitude,'
+                            ' record_time,'
+                            ' nominal_time,'
+                            ' nominal_time_timezone_offset,'
+                            ' nominal_time_timezone_name)'
+                            ' VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                            (user_id,
+                             activity_id,
+                             source,
+                             latitude,
+                             longitude,
+                             record_time,
+                             nominal_time,
+                             nominal_time_timezone_offset,
+                             nominal_time_timezone_name))
+        db.commit()
+
+        resp = Response(b'')
+        resp.status_code = 201
+        resp.headers['Location'] = url_for(
+            'api.log_item', username=username, item_id=cursor.lastrowid)
+
+        return resp
+
+
+@bp.route('/user/<username>/log/<int:item_id>', methods=('GET', 'PATCH', 'DELETE'))
+def log_item(username: str, item_id: int):
+    db = get_db()
+
+    user = get_user(username)
+    if not user:
+        abort(404, 'User not found.')
+    user_id = user['id']
+
+    entry = db.execute(
+        'SELECT * FROM timelog WHERE user_id=? AND id=?', (user_id, item_id)).fetchone()
+    if not entry:
+        abort(404, 'Timelog entry not found.')
+    entry_id = entry['id']
+
+    if request.method == 'GET':
+        return jsonify({
+            'id': entry['id'],
+            'activity_id': entry['activity_id'],
+            'source': entry['source'],
+            'latitude': entry['latitude'],
+            'longitude': entry['longitude'],
+            'server_time': entry['server_time'].isoformat(),
+            'record_time': entry['record_time'].isoformat(),
+            'nominal_time': entry['nominal_time'].isoformat(),
+            'nominal_time_timezone_offset': entry['nominal_time_timezone_offset'],
+            'nominal_time_timezone_name': entry['nominal_time_timezone_name'],
+            'last_modification_time': entry['last_modification_time'].isoformat()
+        })
+    elif request.method == 'PATCH':
+        json_data = request.get_json()
+
+        if json_data.get('id', None):
+            abort(400, 'Entry id cannot be changed.')
+
+        changed = False
+
+        activity_id = json_data.get('activity_id', None)
+        if activity_id and type(activity_id) is int and db.execute('SELECT COUNT(id) FROM activity WHERE id=? and user_id=?', (activity_id, user_id)).fetchone()[0] == 1:
+            db.execute('UPDATE timelog SET activity_id=? WHERE id=?',
+                       (activity_id, entry_id))
+            changed = True
+        elif activity_id and type(activity_id) is int:
+            abort(400, 'Activity must exist.')
+        elif activity_id:
+            abort(400, 'Activity id must be integer.')
+        else:
+            activity_id = entry['activity_id']
+
+        if json_data.get('source', None):
+            abort(400, 'Cannot change entry source.')
+
+        latitude = json_data.get('latitude', None)
+        if latitude and type(latitude) is float:
+            db.execute('UPDATE timelog SET latitude=? WHERE id=?',
+                       (latitude, entry_id))
+            changed = True
+        elif latitude:
+            abort(400, 'Latitude must be float.')
+        else:
+            latitude = entry['latitude']
+
+        longitude = json_data.get('longitude', None)
+        if longitude and type(longitude) is float:
+            db.execute('UPDATE timelog SET longitude=? WHERE id=?',
+                       (longitude, entry_id))
+            changed = True
+        elif longitude:
+            abort(400, 'Longitude must be float')
+        else:
+            longitude = entry['longitude']
+
+        nominal_time = None
+        nominal_time_timezone_offset = entry['nominal_time_timezone_offset']
+        nominal_time_timezone_name = ''
+        nominal_time_str = json_data.get('nominal_time', None)
+        if nominal_time_str:
+            try:
+                _full_nom_time = parser.isoparse(nominal_time_str)
+                nominal_time = _full_nom_time.astimezone(
+                    tz.UTC).replace(tzinfo=None)
+                nominal_time_timezone_offset = _full_nom_time.utcoffset().total_seconds()
+
+                db.execute('UPDATE timelog SET'
+                           ' (nominal_time=?, nominal_time_timezone_offset=?) WHERE id=?',
+                           (nominal_time, nominal_time_timezone_offset, entry_id))
+                changed = True
+            except ValueError:
+                abort(400, 'nominal_time must be in ISO 8601 format.')
+        else:
+            nominal_time = entry['nominal_time']
+
+        last_modification_time = entry['last_modification_time']
+        if changed:
+            last_modification_time = datetime.utcnow()
+            db.execute(
+                'UPDATE timelog SET last_modification_time=? WHERE id=?', (last_modification_time, entry_id))
+
+        db.commit()
+
+        return jsonify({
+            'id': entry_id,
+            'activity_id': activity_id,
+            'source': entry['source'],
+            'latitude': latitude,
+            'longitude': longitude,
+            'server_time': entry['server_time'].isoformat(),
+            'record_time': entry['server_time'].isoformat(),
+            'nominal_time': nominal_time.astimezone(tz.UTC).isoformat(),
+            'nominal_time_timezone_offset': nominal_time_timezone_offset,
+            'nominal_time_timezone_name': entry['nominal_time_timezone_name'],
+            'last_modification_time': last_modification_time.isoformat()
+        })
+
+    elif request.method == 'DELETE':
+        db.execute('DELETE FROM timelog WHERE id=?', (item_id,))
+        db.commit()
+
+        return(b'', 204)
