@@ -1,0 +1,7 @@
+flask
+pytest
+versioneer
+pytest
+coverage
+
+python-dateutil
