@@ -1,5 +1,6 @@
+from .db import get_user
 from flask import (
-    Blueprint, g, redirect, request, session, url_for, jsonify, Response
+    Blueprint, g, json, redirect, request, session, url_for, jsonify, Response
 )
 
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -37,6 +38,13 @@ def not_found(err):
     return {'status_code': 404,
             'description': str(err)
             }, 404
+
+
+@bp.errorhandler(409)
+def conflict(err):
+    return {'status_code': 409,
+            'description': str(err)
+            }, 409
 
 
 @bp.errorhandler(500)
@@ -84,7 +92,7 @@ def add_user():
         elif db.execute(
             'SELECT id FROM user WHERE username = ?', (username,)
         ).fetchone() is not None:
-            abort(400, 'User already exists.')
+            abort(409, 'User already exists.')
 
         if not password:
             abort(400, 'Password is required.')
@@ -226,7 +234,164 @@ def user(username):
 
 @bp.route('/user/<username>/activity', methods=('GET', 'POST'))
 def activity(username):
-    abort(501)
+    db = get_db()
+
+    user = db.execute(
+        'SELECT * FROM user WHERE username = ?', (username,)).fetchone()
+    user_id = user['id']
+
+    if not user:
+        abort(404, 'User not found.')
+
+    if request.method == 'GET':
+        rows = db.execute(
+            'SELECT * FROM activity WHERE user_id = ?', (user_id,)).fetchall()
+
+        return jsonify([{
+            'id': r['id'],
+            'name': r['name'],
+            'description': r['description'],
+            'parent_activity': r['parent_activity'],
+            'is_alias': bool(r['is_alias']),
+            'is_placeholder': bool(r['is_placeholder']),
+        } for r in rows])
+    elif request.method == 'POST':
+        json_data = request.get_json()
+
+        name = json_data.get('name', None)
+        if not name:
+            abort(400, 'Activity name is required')
+        elif db.execute('SELECT COUNT(id) FROM activity WHERE'
+                        ' user_id = ? AND name = ?', (user_id, name)).fetchone()[0] > 0:
+            abort(409, 'Activity already exists.')
+
+        description = json_data.get('description', None)
+
+        parent_activity = None
+        try:
+            parent_activity = int(json_data.get('parent_activity', None))
+        except TypeError:
+            pass
+        except ValueError:
+            abort(400, 'Parent Activity must be an integer.')
+
+        if parent_activity:
+            if not db.execute('SELECT id FROM activity WHERE id = ?', (id,)).fetchone():
+                abort(400, 'Parent activity does not exist.')
+
+        is_alias = json_data.get('is_alias', False)
+        if is_alias and not parent_activity:
+            abort(400, 'Alias must have a parent activity.')
+
+        is_placeholder = json_data.get('is_placeholder', False)
+
+        db.execute('INSERT INTO activity'
+                   '(name, description, parent_activity, is_alias, is_placeholder, user_id)'
+                   'VALUES (?, ?, ?, ?, ?, ?)',
+                   (name, description, parent_activity,
+                    is_alias, is_placeholder, user_id)
+                   )
+        db.commit()
+
+        resp = Response(b'')
+        resp.status_code = 302
+        resp.headers['Location'] = url_for(
+            'api.named_activity', username=username, activity_name=name)
+
+        return resp
+
+
+@bp.route('/user/<username>/activity/<activity_name>', methods=('GET', 'PATCH', 'DELETE'))
+def named_activity(username, activity_name):
+    db = get_db()
+
+    user = get_user(username)
+
+    if not user:
+        abort(404, 'User not found.')
+
+    user_id = user['id']
+    activity = db.execute(
+        'SELECT * FROM activity where user_id=? AND name=?', (user_id, activity_name)).fetchone()
+
+    if not activity:
+        abort(404, 'Activity not found.')
+
+    if request.method == 'GET':
+        return {
+            'id': activity['id'],
+            'name': activity['name'],
+            'description': activity['description'],
+            'is_alias': bool(activity['is_alias']),
+            'is_placeholder': bool(activity['is_placeholder']),
+            'parent_activity': activity['parent_activity']
+        }
+    elif request.method == 'PATCH':
+        json_data = request.get_json()
+
+        if json_data.get('id', None):
+            abort(400, 'Cannot change activity id.')
+
+        name = json_data.get('name', None)
+        if name:
+            db.execute('UPDATE activity SET name = ? WHERE name = ?',
+                       (name, activity_name))
+        else:
+            name = activity['name']
+
+        description = json_data.get('description', None)
+        if description:
+            db.execute('UPDATE activity SET description = ? WHERE name = ?',
+                       (description, activity_name))
+        else:
+            description = activity['description']
+
+        is_placeholder = json_data.get('is_placeholder', None)
+        if is_placeholder is not None:
+            db.execute('UPDATE activity SET is_placeholder = ? WHERE name = ?',
+                       (is_placeholder, activity_name))
+        else:
+            is_placeholder = activity['is_placeholder']
+
+        parent_activity = json_data.get('parent_activity', None)
+        if parent_activity is not None and type(parent_activity) is int and db.execute('SELECT id FROM activity where id=?', (parent_activity,)).fetchone():
+            db.execute('UPDATE activity SET parent_activity = ? WHERE name = ?',
+                       (parent_activity, activity_name))
+        elif parent_activity is not None and type(parent_activity) is int:
+            abort(400, 'Parent activity id does not exist.')
+        elif parent_activity is not None:
+            abort(400, 'Parent activity id must be integer.')
+        else:
+            parent_activity = activity['parent_activity']
+
+        is_alias = json_data.get('is_alias', None)
+        if is_alias is not None and type(is_alias) is bool and parent_activity:
+            db.execute('UPDATE activity SET is_alias=? WHERE name=?',
+                       (is_alias, activity_name))
+        elif is_alias is not None and type(is_alias) is bool:
+            abort(400, 'Activity must have parent to be an alias.')
+        elif is_alias is not None:
+            abort(400, 'is_alias must be a boolean.')
+        else:
+            is_alias = activity['is_alias']
+
+        db.commit()
+
+        return {
+            'name': name,
+            'id': activity['id'],
+            'is_alias': is_alias,
+            'is_placeholder': is_placeholder,
+            'parent_activity': parent_activity,
+            'description': description
+        }
+
+    elif request.method == 'DELETE':
+        db.execute('DELETE FROM activity WHERE user_id = ? AND name = ?',
+                   (user_id, activity_name))
+        db.commit()
+
+        return (b"", 204)
 
 
 @bp.route('/user/<username>/timelog', methods=('GET', 'POST'))

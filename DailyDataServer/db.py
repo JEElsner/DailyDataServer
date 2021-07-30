@@ -1,4 +1,5 @@
 import sqlite3
+from sqlite3.dbapi2 import Row
 
 import click
 from flask import current_app, g
@@ -20,6 +21,13 @@ def get_db():
         g.db.row_factory = sqlite3.Row
 
     return g.db
+
+
+def get_user(username: str) -> Row:
+    db = get_db()
+
+    return db.execute(
+        'SELECT * FROM user WHERE username = ?', (username,)).fetchone()
 
 
 def init_db():
