@@ -294,7 +294,7 @@ def activity(username):
         db.commit()
 
         resp = Response(b'')
-        resp.status_code = 302
+        resp.status_code = 201
         resp.headers['Location'] = url_for(
             'api.named_activity', username=username, activity_name=name)
 
