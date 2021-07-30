@@ -1,3 +1,6 @@
+# TODO There is a lot of repeated code in this file. It could do with some
+# refractoring.
+
 from .db import get_user
 from flask import (
     Blueprint, g, json, redirect, request, session, url_for, jsonify, Response
@@ -11,6 +14,9 @@ from DailyDataServer.db import get_db
 from datetime import datetime, tzinfo
 
 from dateutil import parser, tz
+
+import functools
+import base64
 
 bp = Blueprint('api', __name__, url_prefix='/api')
 
@@ -53,6 +59,33 @@ def conflict(err):
 def internal_service_error(err):
     return {'status_code': 500,
             'description': str(err)}, 500
+
+
+def require_login(view):
+    @functools.wraps(view)
+    def wrapped_view(**kwargs):
+        db = get_db()
+
+        auth_str = request.headers.get('Authorization', None, type=str)
+        if auth_str:
+            auth_type, credentials = auth_str.split(' ')
+
+            if auth_type.lower() == 'basic':
+                user, pw = base64.b64decode(
+                    credentials.encode('utf8')).decode('utf8').split(':', maxsplit=1)
+
+                if user == kwargs['username'] and db.execute('SELECT COUNT(id) FROM user WHERE username=?', (user,)).fetchone()[0]:
+
+                    if check_password_hash(db.execute('SELECT password FROM user WHERE username=?', (user,)).fetchone()[0], pw):
+                        return view(**kwargs)
+                else:
+                    abort(403)
+            else:
+                abort(400, 'Basic authentication required.')
+        else:
+            abort(401)
+
+    return wrapped_view
 
 
 @bp.route('/', methods=('GET',))
@@ -136,6 +169,7 @@ def add_user():
 
 
 @bp.route('/user/<username>', methods=('GET',  'PATCH', 'DELETE'))
+@require_login
 def user(username: str):
     db = get_db()
 
@@ -235,6 +269,7 @@ def user(username: str):
 
 
 @bp.route('/user/<username>/activity', methods=('GET', 'POST'))
+@require_login
 def activity(username: str):
     db = get_db()
 
@@ -304,6 +339,7 @@ def activity(username: str):
 
 
 @bp.route('/user/<username>/activity/<activity_name>', methods=('GET', 'PATCH', 'DELETE'))
+@require_login
 def named_activity(username: str, activity_name: str):
     db = get_db()
 
@@ -397,6 +433,7 @@ def named_activity(username: str, activity_name: str):
 
 
 @bp.route('/user/<username>/log', methods=('GET', 'POST'))
+@require_login
 def log(username: str):
     db = get_db()
 
@@ -494,6 +531,7 @@ def log(username: str):
 
 
 @bp.route('/user/<username>/log/<int:item_id>', methods=('GET', 'PATCH', 'DELETE'))
+@require_login
 def log_item(username: str, item_id: int):
     db = get_db()
 
