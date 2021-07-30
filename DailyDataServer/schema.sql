@@ -26,7 +26,7 @@ CREATE TABLE IF NOT EXISTS timelog (
     latitude FLOAT,
     longitude FLOAT,
     server_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    record_time TIMESTAMP NOT NULL,
+    record_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     nominal_time TIMESTAMP NOT NULL,
     nominal_time_timezone_offset FLOAT NOT NULL,
     nominal_time_timezone_name TEXT,
