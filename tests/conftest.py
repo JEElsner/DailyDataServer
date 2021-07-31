@@ -15,12 +15,13 @@ with open(os.path.join(os.path.dirname(__file__), 'data.sql'), 'rb') as f:
 
 
 @pytest.fixture
-def app():
+def app() -> Flask:
     db_fd, db_path = tempfile.mkstemp()
 
     app = create_app({
         'TESTING': True,
         'DATABASE': db_path,
+        'SERVER_NAME': '127.0.0.1'
     })
 
     with app.app_context():
