@@ -12,6 +12,7 @@
             "label": "Analyze Test Coverage",
             "type": "shell",
             "command": "./tasks/init_venv.ps1; ./tasks/coverage.ps1",
+            "problemMatcher": []
         }
     ]
 }
