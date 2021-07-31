@@ -68,18 +68,27 @@ def require_login(view):
 
         auth_str = request.headers.get('Authorization', None, type=str)
         if auth_str:
-            auth_type, credentials = auth_str.split(' ')
+            try:
+                auth_type, credentials = auth_str.split(' ')
+            except ValueError:
+                abort(400)
 
             if auth_type.lower() == 'basic':
-                user, pw = base64.b64decode(
-                    credentials.encode('utf8')).decode('utf8').split(':', maxsplit=1)
+                user, pw = None, None
+                try:
+                    user, pw = base64.b64decode(
+                        credentials.encode('utf8')).decode('utf8').split(':', maxsplit=1)
+                except (ValueError, UnicodeEncodeError, UnicodeDecodeError) as err:
+                    abort(400)
 
                 if user == kwargs['username'] and db.execute('SELECT COUNT(id) FROM user WHERE username=?', (user,)).fetchone()[0]:
 
                     if check_password_hash(db.execute('SELECT password FROM user WHERE username=?', (user,)).fetchone()[0], pw):
                         return view(**kwargs)
+                    else:
+                        abort(401)
                 else:
-                    abort(403)
+                    abort(401)
             else:
                 abort(400, 'Basic authentication required.')
         else:
