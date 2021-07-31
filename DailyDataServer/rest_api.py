@@ -99,11 +99,15 @@ def require_login(view):
 
 @bp.route('/', methods=('GET',))
 def api():
+    # TODO Ideally, the < and > characters wouldn't be escaped as HTML codes
     return {
         'message': 'This is the REST api for the timelog.',
-        'user_url': url_for('api.user'),
-        'activity_url': url_for('api.activity'),
-        'timelog_url': url_for('api.timelog')
+        'add_user_url': url_for('api.add_user'),
+        'user_url': url_for('api.user', username='<username>'),
+        'add_activity_url': url_for('api.activity', username='<username>'),
+        'activity_url': url_for('api.named_activity', username='<username', activity_name='<activity_name>'),
+        'log_url': url_for('api.log', username='<username>'),
+        # 'log_entry_url': url_for('api.log_item', username='<username>', item_id='<entry_id>')
     }
 
 
