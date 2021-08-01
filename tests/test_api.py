@@ -100,3 +100,78 @@ def test_add_user(client: FlaskClient, app: Flask):
         # This may not always work depending on the integer chosen
         assert row['report_time'] == payload['report_time']
         assert check_password_hash(row['password'], payload['password'])
+
+
+@pytest.mark.parametrize(
+    "key,",
+    ['username', 'name', 'email', 'report_time', 'password', ]
+)
+def test_add_user_without_field(client: FlaskClient, app: Flask, key):
+    payload = {
+        'username': 'new',
+        'name': 'Grace Hopper',
+        'email': 'ghopper@test.com',
+        'report_time': 92,
+        'password': 'mark_one'
+    }
+
+    del payload[key]
+
+    response: flask.Response = client.post('/api/user', json=payload)
+
+    assert response.status == '400 BAD REQUEST'
+    assert key in response.get_json()['description']
+
+
+def test_add_user_bad_email(client: FlaskClient, app: Flask):
+    payload = {
+        'username': 'new',
+        'name': 'Grace Hopper',
+        'email': 'no_at_sign',
+        'report_time': 92,
+        'password': 'mark_one'
+    }
+
+    response: flask.Response = client.post('/api/user', json=payload)
+
+    assert response.status == '400 BAD REQUEST'
+    assert response.get_json(
+    )['description'] == '400 Bad Request: Invalid email address.'
+
+
+def test_non_int_report_time(client: FlaskClient, app: Flask):
+    payload = {
+        'username': 'new',
+        'name': 'Grace Hopper',
+        'email': 'ghopper@test.com',
+        'report_time': "not_an_int",
+        'password': 'mark_one'
+    }
+
+    response: flask.Response = client.post('/api/user', json=payload)
+
+    assert response.status == '400 BAD REQUEST'
+    assert response.get_json(
+    )['description'] == '400 Bad Request: report_time must be integer.'
+
+
+def test_no_json(client: FlaskClient, app: Flask):
+    response: flask.Response = client.post('/api/user', json=None)
+
+    assert response.status == '400 BAD REQUEST'
+    assert 'JSON' in response.get_json()['description']
+
+
+def test_user_exists(client: FlaskClient, app: Flask):
+    payload = {
+        'username': 'test',
+        'name': 'Grace Hopper',
+        'email': 'ghopper@test.com',
+        'report_time': "not_an_int",
+        'password': 'mark_one'
+    }
+
+    response: flask.Response = client.post('/api/user', json=payload)
+
+    assert response.status == '409 CONFLICT'
+    assert 'User already exists' in response.get_json()['description']
