@@ -6,7 +6,8 @@
         {
             "label": "Initialize Python Virtual Environment",
             "type": "shell",
-            "command": "./tasks/init_venv.ps1"
+            "command": "./tasks/init_venv.ps1",
+            "problemMatcher": []
         },
         {
             "label": "Analyze Test Coverage",
