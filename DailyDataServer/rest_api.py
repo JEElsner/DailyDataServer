@@ -113,49 +113,44 @@ def api():
 
 @bp.route('/user', methods=('GET', 'POST'))
 def add_user():
+    db = get_db()
+
     if request.method == 'POST':
         json_data = request.get_json()
 
         if not json_data:
             abort(400, {'message': 'Must supply JSON data.'})
 
-        try:
-            username = json_data['username']
-            name = json_data['name']
-            email = json_data['email']
-            password = json_data['password']
-
-            report_time = None
-            try:
-                report_time = int(json_data['report_time']) % 10080
-            except ValueError:
-                abort(400, 'Report time is not an integer')
-        except KeyError:
-            return redirect(url_for('api.add_user'))
-
-        db = get_db()
-
+        username = json_data.get('username', None)
         if not username:
-            abort(400, {'message': 'Username is required.'})
+            abort(400, {'message': 'username is required.'})
         elif db.execute(
             'SELECT id FROM user WHERE username = ?', (username,)
         ).fetchone() is not None:
             abort(409, 'User already exists.')
 
+        password = json_data.get('password', None)
         if not password:
-            abort(400, 'Password is required.')
+            abort(400, 'password is required.')
 
+        name = json_data.get('name', None)
         if not name:
-            abort(400, 'Name is required.')
+            abort(400, 'name is required.')
 
+        email = json_data.get('email', None)
         if not email:
-            abort(400, 'Email is required.')
+            abort(400, 'email is required.')
         elif '@' not in email:
-            abort(400, 'Invalid email address')
+            abort(400, 'Invalid email address.')
         # TODO verify email address by sending email to user
 
+        report_time = json_data.get('report_time', None)
         if report_time is None:
-            abort(400, 'Report time is required')
+            abort(400, 'report_time is required')
+        elif type(report_time) is not int:
+            abort(400, 'report_time must be integer.')
+        else:
+            report_time %= 10080
 
         db.execute(
             'INSERT INTO user'
