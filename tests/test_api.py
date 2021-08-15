@@ -261,3 +261,17 @@ def test_no_pw_on_pw_change(client: FlaskClient, app: Flask):
 # TODO test no or empty new password.
 #
 # I think currently, the API may just do nothing, which is acceptable, probably.
+
+
+def test_delete_user(client: FlaskClient, app: Flask):
+    auth = {'Authorization': generate_auth('test', 'test')}
+
+    response = client.delete('/api/user/test', headers=auth)
+
+    assert response.status == '204 NO CONTENT'
+
+    with app.app_context():
+        db = get_db()
+
+        assert db.execute(
+            'SELECT COUNT(id) FROM user WHERE username="test"').fetchone()[0] == 0
