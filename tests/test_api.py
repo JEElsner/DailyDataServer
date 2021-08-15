@@ -212,6 +212,11 @@ def test_user_patch(client: FlaskClient, app: Flask, key: str, value, status: st
     else:
         assert response.get_json()[key] == value
 
+        with app.app_context():
+            db = get_db()
+            assert db.execute(
+                'SELECT * FROM user WHERE username = "test"').fetchone()[key] == value
+
 
 def test_successful_change_user_password(client: FlaskClient, app: Flask):
     auth = {'Authorization': generate_auth('test', 'test')}
