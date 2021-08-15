@@ -232,3 +232,32 @@ def test_successful_change_user_password(client: FlaskClient, app: Flask):
         db = get_db()
         assert check_password_hash(db.execute(
             'SELECT password FROM user WHERE username = "test"').fetchone()[0], new_pw)
+
+
+def test_incorrect_pw_on_pw_change(client: FlaskClient, app: Flask):
+    auth = {'Authorization': generate_auth('test', 'test')}
+
+    new_pw = 'new_test_password'
+    payload = {'new_password': new_pw, 'password': 'incorrect'}
+
+    response = client.patch('/api/user/test', json=payload, headers=auth)
+
+    assert response.status == '401 UNAUTHORIZED'
+    assert 'Password incorrect' in response.get_json()['description']
+
+
+def test_no_pw_on_pw_change(client: FlaskClient, app: Flask):
+    auth = {'Authorization': generate_auth('test', 'test')}
+
+    new_pw = 'new_test_password'
+    payload = {'new_password': new_pw}
+
+    response = client.patch('/api/user/test', json=payload, headers=auth)
+
+    assert response.status == '401 UNAUTHORIZED'
+    assert 'Must supply current password' in response.get_json()['description']
+
+
+# TODO test no or empty new password.
+#
+# I think currently, the API may just do nothing, which is acceptable, probably.
