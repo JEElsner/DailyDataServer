@@ -215,9 +215,11 @@ def user(username: str):
             pass
 
         try:
-            if json_data['email']:
+            if json_data['email'] and '@' in json_data['email']:
                 db.execute('UPDATE user SET email = ?, email_confirmed = false'
                            ' WHERE username = ?', (json_data['email'], username))
+            elif json_data['email']:
+                abort(400, 'Invalid email address.')
             else:
                 abort(400, 'Email must be non-empty.')
         except KeyError:
