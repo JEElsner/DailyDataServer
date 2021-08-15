@@ -211,3 +211,19 @@ def test_user_patch(client: FlaskClient, app: Flask, key: str, value, status: st
         assert message in response.get_json()['description']
     else:
         assert response.get_json()[key] == value
+
+
+def test_successful_change_user_password(client: FlaskClient, app: Flask):
+    auth = {'Authorization': generate_auth('test', 'test')}
+
+    new_pw = 'new_test_password'
+    payload = {'new_password': new_pw, 'password': 'test'}
+
+    response = client.patch('/api/user/test', json=payload, headers=auth)
+
+    assert response.status == '200 OK'
+
+    with app.app_context():
+        db = get_db()
+        assert check_password_hash(db.execute(
+            'SELECT password FROM user WHERE username = "test"').fetchone()[0], new_pw)
