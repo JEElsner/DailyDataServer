@@ -175,3 +175,39 @@ def test_user_exists(client: FlaskClient, app: Flask):
 
     assert response.status == '409 CONFLICT'
     assert 'User already exists' in response.get_json()['description']
+
+
+@pytest.mark.xfail
+def test_get_non_existent_user(client: FlaskClient, app: Flask):
+    # This would work if we didn't have authentication, but since we have
+    # authentication, it returns a 401 UNAUTHORIZED error instead.
+    assert client.get('/api/user/non_existent').status == '404 NOT FOUND'
+
+
+@pytest.mark.parametrize(
+    'key, value, status, message',
+    [('name', 'Jones', '200 OK', ''),
+     ('name', '', '400 BAD REQUEST', 'Name must be non-empty'),
+     ('email', 'jones@gmail.com', '200 OK', ''),
+     ('email', None, '400 BAD REQUEST', 'Email must be non-empty'),
+     ('email', 'jones_no_at_sign', '400 BAD REQUEST', 'Invalid email address'),
+     ('report_time', 500, '200 OK', ''),
+     #('report_time', '500', '400 BAD REQUEST', 'integer'),
+     ('report_time', 'asdf', '400 BAD REQUEST', 'integer'),
+     ('report_time', None, '400 BAD REQUEST', 'Report time must be non-empty'),
+     ('username', 'foo', '400 BAD REQUEST', 'Cannot change username'),
+     ('id', 43536, '400 BAD REQUEST', 'Cannot change user id'),
+     ]
+)
+def test_user_patch(client: FlaskClient, app: Flask, key: str, value, status: str, message: str):
+    auth = {'Authorization': generate_auth('test', 'test')}
+
+    payload = {key: value}
+
+    response = client.patch('/api/user/test', json=payload, headers=auth)
+
+    assert response.status == status
+    if '200' not in status:
+        assert message in response.get_json()['description']
+    else:
+        assert response.get_json()[key] == value
