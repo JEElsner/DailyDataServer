@@ -26,6 +26,9 @@ def generate_auth(username: Union[str, bytes], password: Union[str, bytes]) -> b
     return b'Basic ' + base64.b64encode(username + b':' + password)
 
 
+TEST_AUTH = {'Authorization': generate_auth('test', 'test')}
+
+
 @pytest.mark.parametrize(
     'url_usr,usr_endpoint,auth,auth_usr,pw,status',
     [('test', '', b'', b'', b'', '400 BAD REQUEST'),
@@ -200,11 +203,9 @@ def test_get_non_existent_user(client: FlaskClient, app: Flask):
      ]
 )
 def test_user_patch(client: FlaskClient, app: Flask, key: str, value, status: str, message: str):
-    auth = {'Authorization': generate_auth('test', 'test')}
-
     payload = {key: value}
 
-    response = client.patch('/api/user/test', json=payload, headers=auth)
+    response = client.patch('/api/user/test', json=payload, headers=TEST_AUTH)
 
     assert response.status == status
     if '200' not in status:
@@ -219,12 +220,10 @@ def test_user_patch(client: FlaskClient, app: Flask, key: str, value, status: st
 
 
 def test_successful_change_user_password(client: FlaskClient, app: Flask):
-    auth = {'Authorization': generate_auth('test', 'test')}
-
     new_pw = 'new_test_password'
     payload = {'new_password': new_pw, 'password': 'test'}
 
-    response = client.patch('/api/user/test', json=payload, headers=auth)
+    response = client.patch('/api/user/test', json=payload, headers=TEST_AUTH)
 
     assert response.status == '200 OK'
 
@@ -235,24 +234,20 @@ def test_successful_change_user_password(client: FlaskClient, app: Flask):
 
 
 def test_incorrect_pw_on_pw_change(client: FlaskClient, app: Flask):
-    auth = {'Authorization': generate_auth('test', 'test')}
-
     new_pw = 'new_test_password'
     payload = {'new_password': new_pw, 'password': 'incorrect'}
 
-    response = client.patch('/api/user/test', json=payload, headers=auth)
+    response = client.patch('/api/user/test', json=payload, headers=TEST_AUTH)
 
     assert response.status == '401 UNAUTHORIZED'
     assert 'Password incorrect' in response.get_json()['description']
 
 
 def test_no_pw_on_pw_change(client: FlaskClient, app: Flask):
-    auth = {'Authorization': generate_auth('test', 'test')}
-
     new_pw = 'new_test_password'
     payload = {'new_password': new_pw}
 
-    response = client.patch('/api/user/test', json=payload, headers=auth)
+    response = client.patch('/api/user/test', json=payload, headers=TEST_AUTH)
 
     assert response.status == '401 UNAUTHORIZED'
     assert 'Must supply current password' in response.get_json()['description']
@@ -263,9 +258,7 @@ def test_no_pw_on_pw_change(client: FlaskClient, app: Flask):
 # I think currently, the API may just do nothing, which is acceptable, probably.
 
 def test_delete_user(client: FlaskClient, app: Flask):
-    auth = {'Authorization': generate_auth('test', 'test')}
-
-    response = client.delete('/api/user/test', headers=auth)
+    response = client.delete('/api/user/test', headers=TEST_AUTH)
 
     assert response.status == '204 NO CONTENT'
 
@@ -328,10 +321,8 @@ def assert_activity_created(app: Flask, user_id: int, expected_data: dict):
                              },
                          ])
 def test_successful_create_activity(client: FlaskClient, app: Flask, payload: dict):
-    auth = {'Authorization': generate_auth('test', 'test')}
-
     response = client.post('/api/user/test/activity',
-                           json=payload, headers=auth)
+                           json=payload, headers=TEST_AUTH)
 
     assert response.status == '201 CREATED'
     assert '/api/user/test/activity/' + \
@@ -341,10 +332,8 @@ def test_successful_create_activity(client: FlaskClient, app: Flask, payload: di
 
 
 def test_new_activity_without_extra_info(client: FlaskClient, app: Flask):
-    auth = {'Authorization': generate_auth('test', 'test')}
-
     response = client.post('/api/user/test/activity',
-                           json={'name': 'wishing-you-a-pleasant-day'}, headers=auth)
+                           json={'name': 'wishing-you-a-pleasant-day'}, headers=TEST_AUTH)
 
     assert response.status == '201 CREATED'
     assert '/api/user/test/activity/wishing-you-a-pleasant-day' in response.headers['location']
@@ -359,8 +348,6 @@ def test_new_activity_without_extra_info(client: FlaskClient, app: Flask):
 
 
 def test_create_activity_with_no_name(client: FlaskClient, app: Flask):
-    auth = {'Authorization': generate_auth('test', 'test')}
-
     payload = {
         'description': None,
         'is_alias': False,
@@ -369,7 +356,7 @@ def test_create_activity_with_no_name(client: FlaskClient, app: Flask):
     }
 
     response = client.post('/api/user/test/activity',
-                           json=payload, headers=auth)
+                           json=payload, headers=TEST_AUTH)
 
     assert response.status == '400 BAD REQUEST'
     assert 'name is required' in response.get_json()['description']
@@ -406,10 +393,8 @@ def test_create_activity_with_no_name(client: FlaskClient, app: Flask):
     }, '400 BAD REQUEST', 'Parent activity does not exist'),
 ])
 def test_bad_activity_creation(client: FlaskClient, app: Flask, payload: dict, status: str, desc: str):
-    auth = {'Authorization': generate_auth('test', 'test')}
-
     response = client.post('/api/user/test/activity',
-                           json=payload, headers=auth)
+                           json=payload, headers=TEST_AUTH)
 
     assert response.status == status
     assert desc in response.get_json()['description']
