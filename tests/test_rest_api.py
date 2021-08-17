@@ -262,7 +262,6 @@ def test_no_pw_on_pw_change(client: FlaskClient, app: Flask):
 #
 # I think currently, the API may just do nothing, which is acceptable, probably.
 
-
 def test_delete_user(client: FlaskClient, app: Flask):
     auth = {'Authorization': generate_auth('test', 'test')}
 
@@ -275,3 +274,142 @@ def test_delete_user(client: FlaskClient, app: Flask):
 
         assert db.execute(
             'SELECT COUNT(id) FROM user WHERE username="test"').fetchone()[0] == 0
+
+
+def assert_activity_created(app: Flask, user_id: int, expected_data: dict):
+    with app.app_context():
+        db = get_db()
+
+        row = db.execute('SELECT * FROM activity WHERE user_id=? AND name=?',
+                         (user_id, expected_data['name'])).fetchone()
+
+        assert row is not None
+
+        for key, value in expected_data.items():
+            assert row[key] == value
+
+
+@pytest.mark.parametrize('payload',
+                         [
+                             {
+                                 'name': 'knitting_a_sweater_for_a_kitten',
+                                 'description': None,
+                                 'is_alias': False,
+                                 'is_placeholder': False,
+                                 'parent_activity': None
+                             },
+                             {
+                                 'name': 'knitting_a_sweater_for_a_kitten',
+                                 'description': 'is it not obvious?',
+                                 'is_alias': False,
+                                 'is_placeholder': False,
+                                 'parent_activity': None
+                             },
+                             {
+                                 'name': 'knitting_a_sweater_for_a_kitten',
+                                 'description': None,
+                                 'is_alias': True,
+                                 'is_placeholder': False,
+                                 'parent_activity': 1
+                             },
+                             {
+                                 'name': 'petting_animals',
+                                 'description': None,
+                                 'is_alias': False,
+                                 'is_placeholder': True,
+                                 'parent_activity': None
+                             },
+                             {
+                                 'name': 'programming',
+                                 'description': None,
+                                 'is_alias': False,
+                                 'is_placeholder': False,
+                                 'parent_activity': None
+                             },
+                         ])
+def test_successful_create_activity(client: FlaskClient, app: Flask, payload: dict):
+    auth = {'Authorization': generate_auth('test', 'test')}
+
+    response = client.post('/api/user/test/activity',
+                           json=payload, headers=auth)
+
+    assert response.status == '201 CREATED'
+    assert '/api/user/test/activity/' + \
+        payload['name'] in response.headers['location']
+
+    assert_activity_created(app, 1, payload)
+
+
+def test_new_activity_without_extra_info(client: FlaskClient, app: Flask):
+    auth = {'Authorization': generate_auth('test', 'test')}
+
+    response = client.post('/api/user/test/activity',
+                           json={'name': 'wishing-you-a-pleasant-day'}, headers=auth)
+
+    assert response.status == '201 CREATED'
+    assert '/api/user/test/activity/wishing-you-a-pleasant-day' in response.headers['location']
+
+    assert_activity_created(app, 1, {
+        'name': 'wishing-you-a-pleasant-day',
+        'description': None,
+        'is_alias': False,
+        'is_placeholder': False,
+        'parent_activity': None
+    })
+
+
+def test_create_activity_with_no_name(client: FlaskClient, app: Flask):
+    auth = {'Authorization': generate_auth('test', 'test')}
+
+    payload = {
+        'description': None,
+        'is_alias': False,
+        'is_placeholder': False,
+        'parent_activity': None
+    }
+
+    response = client.post('/api/user/test/activity',
+                           json=payload, headers=auth)
+
+    assert response.status == '400 BAD REQUEST'
+    assert 'name is required' in response.get_json()['description']
+
+
+@pytest.mark.parametrize('payload, status, desc', [
+    ({
+        'name': 'alias_but_no_parent',
+        'description': None,
+        'is_alias': True,
+        'is_placeholder': False,
+        'parent_activity': None
+    }, '400 BAD REQUEST', 'Alias must have a parent activity'),
+    ({
+        'name': 'math',  # activity already exists
+        'description': None,
+        'is_alias': True,
+        'is_placeholder': False,
+        'parent_activity': None
+    }, '409 CONFLICT', 'Activity already exists'),
+    ({
+        'name': 'non_int_parent',
+        'description': None,
+        'is_alias': True,
+        'is_placeholder': False,
+        'parent_activity': 'foo'
+    }, '400 BAD REQUEST', 'Parent Activity must be an integer'),
+    ({
+        'name': 'parent_not_exist',
+        'description': None,
+        'is_alias': True,
+        'is_placeholder': False,
+        'parent_activity': 2346
+    }, '400 BAD REQUEST', 'Parent activity does not exist'),
+])
+def test_bad_activity_creation(client: FlaskClient, app: Flask, payload: dict, status: str, desc: str):
+    auth = {'Authorization': generate_auth('test', 'test')}
+
+    response = client.post('/api/user/test/activity',
+                           json=payload, headers=auth)
+
+    assert response.status == status
+    assert desc in response.get_json()['description']
