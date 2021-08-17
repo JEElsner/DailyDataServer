@@ -323,7 +323,7 @@ def activity(username: str):
             abort(400, 'Parent Activity must be an integer.')
 
         if parent_activity:
-            if not db.execute('SELECT id FROM activity WHERE id = ?', (id,)).fetchone():
+            if not db.execute('SELECT id FROM activity WHERE id = ?', (parent_activity,)).fetchone():
                 abort(400, 'Parent activity does not exist.')
 
         is_alias = json_data.get('is_alias', False)
